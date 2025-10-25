@@ -1,11 +1,213 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+  <meta charset="UTF-8">
+  <title>After School Lessons</title>
+
+  <!-- bootstrap 4 and font awesome -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- lessons data -->
+  <script src="lessons.js"></script>
+
+  <script src="https://unpkg.com/vue@2.7.8/dist/vue.js"></script>
+
+  <style>
+    [v-cloak] { 
+      display: none; 
+    }
+    .lesson-card { 
+      margin-bottom: 20px; /* adds space between lesson cards*/
+    }
+  </style>
 </head>
 <body>
-    
+  <!-- Search Bar -->
+<div class="form-row mb-4">
+  <div class="col-md-6">
+    <input
+      type="text"
+      class="form-control"
+      placeholder="Search lessons..."
+      v-model="searchQuery"
+      @input="searchLessons"
+    />
+  </div>
+</div>
+
+ <!-- wrapper for the entire web app --> 
+<div id="app" class="container my-5" v-cloak>
+  <header class="d-flex justify-content-between align-items-center mb-4"> <!-- header neatly places the title on one side and the cart button on the other-->
+    <h1>After School Lessons</h1>
+    <!-- if number of items is 0 in cart, then user can't click on button and button is grey-->
+    <button class="btn btn-primary" :disabled="cart.length === 0" @click="toggleCart"> 
+      <i class="fas fa-shopping-cart"></i> 
+      {{ cartItemCount }} Cart <!-- vue computed property that shows current number of items in cart -->
+    </button>
+  </header>
+
+  <main>
+    <!-- lesson's page -->
+    <div v-if="showLessons">
+      <!-- Sorting -->
+      <div class="form-row mb-4">
+        <div class="col-md-4">
+          <select v-model="sortKey" class="form-control">
+            <option disabled value="">Sort by...</option>
+            <option value="subject">Subject</option>
+            <option value="location">Location</option>
+            <option value="price">Price</option>
+            <option value="spaces">Spaces</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-outline-secondary btn-block" @click="toggleSortOrder">
+            {{ sortOrder === 'asc' ? 'Ascending' : 'Descending' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Lessons -->
+      <div class="row">
+        <div class="col-md-4" v-for="lesson in sortedLessons" :key="lesson.id">
+          <div class="card lesson-card">
+            <div class="card-body">
+              <h5 class="card-title"><i :class="lesson.icon"></i> {{ lesson.subject }}</h5>
+              <p class="card-text">
+                <strong>Location:</strong> {{ lesson.location }}<br>
+                <strong>Price:</strong> ${{ lesson.price }}<br>
+                <strong>Spaces Left:</strong> {{ lesson.spaces }}
+              </p>
+
+              <button class="btn btn-success" :disabled="!canAddToCart(lesson)" @click="addToCart(lesson)">
+                Add to Cart
+              </button>
+
+              <div class="mt-2">
+                <span v-if="lesson.spaces === 0" class="text-danger">Full!</span>
+                <span v-else-if="lesson.spaces < 3" class="text-warning">Only {{ lesson.spaces }} left!</span>
+                <span v-else>Available</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHECKOUT PAGE -->
+    <div v-else>
+      <h2>Checkout</h2>
+      <ul class="list-group mb-3">
+        <li class="list-group-item d-flex justify-content-between align-items-center"
+            v-for="(item, index) in cart" :key="index">
+          <div>{{ item.subject }} - {{ item.location }} - ${{ item.price }}</div>
+          <button class="btn btn-sm btn-danger" @click="removeFromCart(index)">Remove</button>
+        </li>
+      </ul>
+
+      <!-- Form Inputs -->
+      <div class="form-group">
+        <label><strong>Name:</strong></label>
+        <input class="form-control" v-model="order.name" />
+      </div>
+      <div class="form-group">
+        <label><strong>Phone:</strong></label>
+        <input class="form-control" v-model="order.phone" />
+      </div>
+
+      <button class="btn btn-success mr-2" :disabled="!validCheckout" @click="submitOrder">
+        Place Order
+      </button>
+
+      <!-- Back to Lessons Button -->
+      <button class="btn btn-secondary" @click="toggleCart">
+        <i class="fas fa-arrow-left"></i> Back to Lessons
+      </button>
+
+      <div v-if="orderSubmitted" class="alert alert-success mt-3">
+        Thank you! Your order has been submitted.
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+new Vue({
+  el: '#app',
+  data: {
+    showLessons: true,
+    sortKey: '',
+    sortOrder: 'asc',
+    cart: [],
+    orderSubmitted: false,
+    order: { name: '', phone: '' },
+    lessons: (typeof lessons !== 'undefined') ? lessons : []
+  },
+  computed: {
+  sortedLessons() {
+    if (!this.sortKey) return this.lessons; // no sorting yet
+
+    // comparison function
+    function compare(a, b) {
+      const valA = a[this.sortKey];
+      const valB = b[this.sortKey];
+
+      // check if values are numbers or strings
+      if (typeof valA === "number" && typeof valB === "number") {
+        if (valA > valB) return 1;
+        if (valA < valB) return -1;
+        return 0;
+      } else {
+        const strA = valA.toString().toLowerCase();
+        const strB = valB.toString().toLowerCase();
+        if (strA > strB) return 1;
+        if (strA < strB) return -1;
+        return 0;
+      }
+    }
+
+    // sort using the compare function
+    const sorted = [...this.lessons].sort(compare.bind(this));
+
+    // reverse if descending order is selected
+    if (this.sortOrder === 'desc') sorted.reverse();
+
+    return sorted;
+  }
+},
+
+  methods: {
+    addToCart(lesson) {
+      if (this.canAddToCart(lesson)) {
+        lesson.spaces--;
+        this.cart.push(lesson);
+      }
+    },
+    removeFromCart(index) {
+      const lesson = this.cart[index];
+      if (lesson && typeof lesson.spaces === 'number') lesson.spaces++;
+      this.cart.splice(index, 1);
+    },
+    canAddToCart(lesson) {
+      return lesson.spaces > 0;
+    },
+    toggleSortOrder() {
+      this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+    },
+    toggleCart() {
+      this.showLessons = !this.showLessons;
+      this.orderSubmitted = false;
+    },
+    submitOrder() {
+      this.orderSubmitted = true;
+      this.cart = [];
+      this.order.name = '';
+      this.order.phone = '';
+      this.showLessons = true;
+    }
+  }
+});
+</script>
 </body>
 </html>
